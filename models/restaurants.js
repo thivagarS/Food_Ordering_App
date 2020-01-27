@@ -57,6 +57,6 @@ const resturantSchema = new Schema({
     }
 }, { timestamps: true})
 
-const Restaurant = mongoose.model('Restaurants', resturantSchema);
+const Restaurant = mongoose.model('restaurants', resturantSchema);
 
 module.exports = Restaurant;
