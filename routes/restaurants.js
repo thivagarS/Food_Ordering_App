@@ -23,6 +23,31 @@ router.patch('/verification/:token', restaurantController.patchVerifyRestaurantE
 */
 router.patch('/changeAvailability', restaurantController.patchChangeRestaurantAvailability);
 /*
+    @Method - GET
+    @Auth - not required
+    @Desc - This route is used to get all restaurant.
+*/
+router.get('/all', restaurantController.getRestaurants);
+/*
+    @Method - GET
+    @Auth -  required
+    @Desc - This route is used to get all restaurant for particular user.
+*/
+router.get('/user/all', restaurantController.getRestaurantsForUser);
+/*
+    @Method - GET
+    @Auth - not required
+    @Desc - This route is used to get particular restaurant.
+*/
+router.get('/:restaurantId', restaurantController.getRestaurant);
+/*
+    @Method - GET
+    @Auth - required
+    @Desc - This route is used to get restaurant menu.
+*/
+router.get('/menu/:restaurantId', restaurantController.getRestaurantMenu);
+
+/*
     @Method - PATCH
     @Auth - required
     @Desc - This route is used to add category.
@@ -31,9 +56,33 @@ router.patch('/category/add', restaurantController.patchAddCategory);
 /*
     @Method - PATCH
     @Auth - required
+    @Desc - This route is used to edit category.
+*/
+router.patch('/category/edit/:categoryId', restaurantController.patchEditCategory);
+/*
+    @Method - PATCH
+    @Auth - required
+    @Desc - This route is used to delete category.
+*/
+router.patch("/category/delete/:categoryId", restaurantController.patchDeleteCategory);
+/*
+    @Method - PATCH
+    @Auth - required
     @Desc - This route is used to add sub category.
 */
 router.patch('/subCategory/add', restaurantController.patchAddSubCategory);
+/*
+    @Method - PATCH
+    @Auth - required
+    @Desc - This route is used to add sub category.
+*/
+router.patch('/subCategory/edit/:subCategoryId', restaurantController.patchEditSubCategory);
+/*
+    @Method - PATCH
+    @Auth - required
+    @Desc - This route is used to delete sub category.
+*/
+router.patch('/subCategory/delete/:subCategoryId', restaurantController.patchDeleteSubCategory);
 /*
     @Method - PATCH
     @Auth - required
@@ -45,6 +94,12 @@ router.patch('/item/add', restaurantController.patchAddItem);
     @Auth - required
     @Desc - This route is used to update the item.
 */
-router.patch('/item/edit', restaurantController.patchEditItem);
+router.patch('/item/edit/:itemId', restaurantController.patchEditItem);
+/*
+    @Method - DELETE
+    @Auth - required
+    @Desc - This route is used to delete the item.
+*/
+router.patch('/item/delete/:itemId', restaurantController.patchDeleteItem);
 
 module.exports = router;

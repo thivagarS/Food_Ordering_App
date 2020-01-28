@@ -4,7 +4,7 @@ const Schema = mongoose.Schema;
 const menuSchema = new Schema({
     restaurantId: {
         type: Schema.Types.ObjectId,
-        ref: 'restaurants'
+        ref: 'Restaurant'
     },
     category: [
         {
