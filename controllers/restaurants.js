@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
-const Restaurant = require('../models/restaurants');
-const Menu = require('../models/menu');
+const Restaurant = require('../models/Restaurants');
+const Menu = require('../models/Menu');
 
 const { sendMail } = require('../utils/mailer');
 
@@ -81,8 +81,9 @@ module.exports.postAddRestaurant = (req, res, next) => {
             phoneNumber,
             position
         } = req.body;
+    const userId = req.user._id;
     try {     
-            // This will generate a token
+            // This will generate a token 
             crypto.randomBytes(32, (err, buffer) => {
                 let restaurantResult = undefined;
                 if(err) {
@@ -90,6 +91,7 @@ module.exports.postAddRestaurant = (req, res, next) => {
                 }
                 const token = buffer.toString('hex');
                 const newRestaurant = new Restaurant({
+                    userId,
                     name, 
                     email, 
                     emailVerificationToken: token,

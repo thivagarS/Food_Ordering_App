@@ -3,6 +3,8 @@ const bodyParser = require("body-parser");
 
 // Restaurant Routes
 const restaurantRoutes = require("./routes/restaurants");
+// User Routes
+const authRoutes = require('./routes/auth');
 require('./db');
 
 const app = express();
@@ -14,6 +16,7 @@ app.use(bodyParser.json());
 
 // Routes
 app.use('/v1/restaurant', restaurantRoutes);
+app.use('/v1/auth', authRoutes);
 
 app.get('/', (req, res, next) => {
     res.send("Hello world");
