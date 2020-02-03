@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 
 const { sendMail } = require('../utils/mailer');
 const User = require('../models/User');
+const Restaurant = require('../models/Restaurants');
 
 const asyncRandomBytes = promisify(crypto.randomBytes);
 
@@ -117,6 +118,7 @@ module.exports.patchVerifyUserEmail = (req, res, next) => {
 module.exports.postLogin = (req, res, next) => {
     const { email, password, loginAttempt } = req.body;
     let loadedUser;
+    let authToken;
     // This will check whether user email exists
     User.findOne({
         email
@@ -144,9 +146,17 @@ module.exports.postLogin = (req, res, next) => {
                 expiresIn: '1h'
             })}`;
         console.log(token);
+        authToken = token;
+        return Restaurant.find({
+            userId: loadedUser._id
+        })
+    })
+    .then(result => {
         res.status(200).json({
-            token,
-            userId: loadedUser._id.toString()
+            token: authToken,
+            userId: loadedUser._id.toString(),
+            name: loadedUser.name,
+            isHavingRestaurant: result.length > 0 ? true : false
         })
     })
     .catch(err => {

@@ -72,7 +72,7 @@ const findItemById = (itemId, subCategoryId, categoryId, restaurantId) => {
 }
 
 module.exports.postAddRestaurant = (req, res, next) => {
-    const { name, 
+    let { name, 
             email, 
             address, 
             city,
@@ -81,7 +81,11 @@ module.exports.postAddRestaurant = (req, res, next) => {
             phoneNumber,
             position
         } = req.body;
-    const userId = req.user._id;
+    const userId = req.userId;
+    name = name.toLowerCase();
+    email = email.toLowerCase();
+    city = city.toLowerCase();
+    state = state.toLowerCase();
     try {     
             // This will generate a token 
             crypto.randomBytes(32, (err, buffer) => {
@@ -163,7 +167,6 @@ module.exports.patchVerifyRestaurantEmail = (req, res, next) => {
         .then(result => {
             res.status(200).json({
                 message: "Email is verified successfully",
-                result
             })
         })
         .catch(err => {
@@ -210,25 +213,7 @@ module.exports.getRestaurant = (req, res, next) => {
         }
         res.status(200).json({
             message: "Restaurant found successfully",
-            result
-        })
-        .catch(err => {
-            if(!err.statusCode)
-                err.statusCode = 500;
-            next(err);
-        })
-    })
-}
-
-module.exports.getRestaurantsForUser = (req, res, next) => {
-    const userId = req.body.userId; // change
-    Restaurant.find({
-        userId
-    })
-    .then(result => {
-        res.status(200).json({
-            message: "Restaurant found for the user",
-
+            result: result
         })
     })
     .catch(err => {
@@ -238,21 +223,123 @@ module.exports.getRestaurantsForUser = (req, res, next) => {
     })
 }
 
-module.exports.getRestaurantMenu = (req, res, next) => {
-    return null;
-    // Need to implement
+module.exports.getRestaurantsForUser = (req, res, next) => {
+    const userId = req.userId;
+    Restaurant.find({
+        userId
+    })
+    .then(result => {
+        res.status(200).json({
+            message: "Restaurant found for the user",
+            result
+        })
+    })
+    .catch(err => {
+        if(!err.statusCode)
+            err.statusCode = 500;
+        next(err);
+    })
 }
+
+module.exports.getUserRestaurantMenu = (req, res, next) => {
+    const restaurantId = req.params.restaurantId;
+    const userId = req.userId;
+    Menu.findOne({
+        restaurantId
+    })
+    .then(result => {
+        // This will check whether restaurant is available to the signed in user
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw error;
+        }
+        return result.populate('restaurantId')
+        .execPopulate()
+    })
+    .then(restaurant => {
+        if(restaurantId._id.toString() !== userId.toString()) {
+            const error = new Error("Restaurant does not belong to logged in user");
+            error.statusCode = 401;
+            throw error;
+        }
+        return res.status(200).json({
+            message: "Fetched Restaurant menu successfully",
+            result: {
+                menu: restaurant.category,
+                name: restaurant.restaurantId.name,
+                email: restaurant.restaurantId.email,
+                address: restaurant.restaurantId.address,
+                city: restaurant.restaurantId.city,
+                state: restaurant.restaurantId.state
+            }
+        })
+    })
+    .catch(err => {
+        if(!err.statusCode)
+            err.statusCode = 500;
+        throw err;
+        next(err);
+    })
+}
+
+module.exports.getRestaurantMenu = (req, res, next) => {
+    const restaurantId = req.params.restaurantId;
+    Menu.findOne({
+        restaurantId
+    })
+    .then(result => {
+        // This will check whether restaurant is available to the signed in user
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw error;
+        }
+        return result.populate('restaurantId')
+        .execPopulate()
+    })
+    .then(restaurant => {
+        return res.status(200).json({
+            message: "Fetched Restaurant menu successfully",
+            result: {
+                menu: restaurant.category,
+                name: restaurant.restaurantId.name,
+                email: restaurant.restaurantId.email,
+                address: restaurant.restaurantId.address,
+                city: restaurant.restaurantId.city,
+                state: restaurant.restaurantId.state
+            }
+        })
+    })
+    .catch(err => {
+        if(!err.statusCode)
+            err.statusCode = 500;
+        throw err;
+        next(err);
+    })
+}
+
 module.exports.patchChangeRestaurantAvailability = (req, res, next) => {
+    const userId = req.userId;
     const restaurantId = req.body.restaurantId; 
     // This will be change the resturant availability
-    Restaurant.findById(restaurantId)
+    Restaurant.findOne({
+        userId,
+        _id: restaurantId
+    })
     .then(result => {
+        // This will check whether restaurant is available to the signed in user
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw error;
+        }
         // This will check whether resturant email account is verified
         if(result.isEmailVerified) {
             result.isAvailableForOrder = !result.isAvailableForOrder;
             return result.save()
         }
-        const error = new Error('Aactivate email account to open restaurant for orders');
+        const error = new Error('Activate email account to open restaurant for orders');
         error.statusCode = 401;
         throw error;
     })
@@ -272,16 +359,31 @@ module.exports.patchChangeRestaurantAvailability = (req, res, next) => {
 
 module.exports.patchAddCategory = (req, res, next) => {
     const { restaurantId, name } = req.body;
+    const userId = req.userId;
     const lowerCaseName = name.toLowerCase();
-    Menu.findOne({
-        restaurantId,
-        "category": {
-            $elemMatch: {
-                name: lowerCaseName
-            }
-        }
+    // Check whether restaurant exists
+    Restaurant.findOne({
+        _id: restaurantId,
+        userId
     })
     .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // Checks category exists
+        return Menu.findOne({
+            restaurantId,
+            "category": {
+                $elemMatch: {
+                    name: lowerCaseName
+                }
+            }
+        })
+    })  
+    .then(result => {
+        // Try populate result.populate(res)
         console.log(result)
         if(result) {
             const error = new Error("Category is already created ...");
@@ -303,7 +405,10 @@ module.exports.patchAddCategory = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Category is created successfully",
-            result
+            result: {
+                categoryName: lowerCaseName,
+                categoryId: result.category._id
+            }
         });
     })
     .catch(err => {
@@ -317,8 +422,20 @@ module.exports.patchEditCategory = (req, res, next) => {
     const { categoryId } = req.params;
     const { restaurantId, name } = req.body;
     const formattedName = name.toLowerCase();
-    // This will check whether category exists
-    findCategoryById(categoryId, restaurantId)
+    const userId = req.userId;
+    Restaurant.findOne({
+        _id: restaurantId,
+        userId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // This will check whether category exists
+        return findCategoryById(categoryId, restaurantId)
+    }) 
     .then(result => {
         // This will check whether category exists
         if(!result) {
@@ -343,7 +460,10 @@ module.exports.patchEditCategory = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Category is updated successfully",
-            result
+            result: {
+                categoryName: formattedName,
+                categoryId
+            }
         })
     })
     .catch(err => {
@@ -356,8 +476,20 @@ module.exports.patchEditCategory = (req, res, next) => {
 module.exports.patchDeleteCategory = (req, res, next) => {
     const { categoryId } = req.params;
     const { restaurantId } = req.body;
-    // This will find the category exists or not
-    findCategoryById(categoryId, restaurantId)
+    const userId = req.userId;
+    Restaurant.findOne({
+        _id: restaurantId,
+        userId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // This will find the category exists or not
+        return findCategoryById(categoryId, restaurantId)
+    })
     .then(result => {
         if(!result) {
             const error = new Error("Category does not exists");
@@ -379,7 +511,9 @@ module.exports.patchDeleteCategory = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Category is removed successfully",
-            result
+            result: {
+                categoryId
+            }
         })
     })
     .catch(err => {
@@ -392,19 +526,31 @@ module.exports.patchDeleteCategory = (req, res, next) => {
 module.exports.patchAddSubCategory = (req, res, next) => {
     const { restaurantId, categoryId,  subCategoryName} = req.body;
     const subCategoryLoweCaseName = subCategoryName.toLowerCase();
-    // THis will check whether sub category exists for the selected category
-    Menu.findOne({
-        restaurantId, 
-        "category": {
-            $elemMatch: {
-                _id: categoryId,
-                subCategory: {
-                    $elemMatch: {
-                        name: subCategoryLoweCaseName
+    const userId = req.userId;
+    Restaurant.findOne({
+        userId,
+        _id: restaurantId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // THis will check whether sub category exists for the selected category
+        return Menu.findOne({
+            restaurantId, 
+            "category": {
+                $elemMatch: {
+                    _id: categoryId,
+                    subCategory: {
+                        $elemMatch: {
+                            name: subCategoryLoweCaseName
+                        }
                     }
                 }
             }
-        }
+        })
     })
     .then(result => {
         if(result) {
@@ -430,7 +576,11 @@ module.exports.patchAddSubCategory = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Sub Category is added successfully to the selected category",
-            result
+            result: {
+                categoryId: categoryId,
+                subCategoryName: subCategoryLoweCaseName,
+                subCategoryId: result.category.subCategory._id
+            }
         })
     })
     .catch(err => {
@@ -444,8 +594,20 @@ module.exports.patchEditSubCategory = (req, res, next) => {
     const { subCategoryId } = req.params;
     const { restaurantId, categoryId, name } = req.body;
     const formattedName = name.toLowerCase();
-    // This will check whether sub category exists
-    findSubCategoryById(subCategoryId, categoryId, restaurantId)
+    const userId = req.userId;
+    Restaurant.findOne({
+        userId,
+        _id: restaurantId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // This will check whether sub category exists
+        return findSubCategoryById(subCategoryId, categoryId, restaurantId)
+    })
     .then(result => {
         // This will check whether sub category exists
         if(!result) {
@@ -472,7 +634,11 @@ module.exports.patchEditSubCategory = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Sub Category is updated successfully",
-            result
+            result: {
+                subCategoryName: formattedName,
+                subCategoryId,
+                categoryId
+            }
         })
     })
     .catch(err => {
@@ -485,8 +651,20 @@ module.exports.patchEditSubCategory = (req, res, next) => {
 module.exports.patchDeleteSubCategory = (req, res, next) => {
     const { subCategoryId } = req.params;
     const { restaurantId, categoryId } = req.body;
-    // This will check whether sub category exists
-    findSubCategoryById(subCategoryId, categoryId, restaurantId)
+    const userId = req.userId;
+    Restaurant.findOne({
+        userId,
+        restaurantId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // This will check whether sub category exists
+        return findSubCategoryById(subCategoryId, categoryId, restaurantId)
+    })
     .then(result => {
         // This will check whether sub category exists
         if(!result) {
@@ -515,7 +693,10 @@ module.exports.patchDeleteSubCategory = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Sub category is removed successfully",
-            result
+            result: {
+                categoryId,
+                subCategoryId
+            }
         })
     })
     .catch(err => {
@@ -524,27 +705,40 @@ module.exports.patchDeleteSubCategory = (req, res, next) => {
         next(err);
     })
 }
+
 module.exports.patchAddItem = (req, res, next) => {
     const { restaurantId, categoryId, subCategoryId, name, description, rate, isVeg } = req.body;
     const formattedItemName = name.toLowerCase();
-    // This will check whether the item is exist under same category n same sub category
-    Menu.findOne({
-        restaurantId,
-        "category": {
-            $elemMatch: {
-                _id: categoryId,
-                "subCategory": {
-                    $elemMatch: {
-                        _id: subCategoryId,
-                        item: {
-                            $elemMatch: {
-                                name: formattedItemName
+    const userId = req.userId;
+    Restaurant.findOne({
+        userId,
+        restaurantId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // This will check whether the item is exist under same category n same sub category
+        return Menu.findOne({
+            restaurantId,
+            "category": {
+                $elemMatch: {
+                    _id: categoryId,
+                    "subCategory": {
+                        $elemMatch: {
+                            _id: subCategoryId,
+                            item: {
+                                $elemMatch: {
+                                    name: formattedItemName
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+        })
     })
     .then(result => {
         // This will throw error if the record exists
@@ -580,7 +774,15 @@ module.exports.patchAddItem = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Item is successfully added to the list",
-            result
+            result: {
+                categoryId,
+                subCategoryId,
+                itemId: result.category.subCategory.item._id,
+                itemName: formattedItemName,
+                itemDescription: description,
+                itemRate: rate,
+                itemIsVeg: isVeg
+            }
         })
     })
     .catch(err => {
@@ -600,8 +802,20 @@ module.exports.patchEditItem = (req, res, next) => {
         isItemAvailable
     } = req.body;
     const { itemId } = req.params;
-    // This will check whether item is present
-    findItemById(itemId, subCategoryId, categoryId, restaurantId)
+    const userId = req.userId;
+    Restaurant.findOne({
+        userId,
+        restaurantId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        // This will check whether item is present
+        return findItemById(itemId, subCategoryId, categoryId, restaurantId)
+    })
     .then(result => {
         // This will check whether item exist
         if(!result) {
@@ -631,11 +845,17 @@ module.exports.patchEditItem = (req, res, next) => {
             ]
         })
     })
-    
     .then(result => {
         res.status(200).json({
             message: "Item is created successfully",
-            result
+            result: {
+                categoryId,
+                subCategoryId,
+                itemId,
+                itemDescription: description,
+                itemRate: rate,
+                itemIsAvailable: isItemAvailable
+            }
         })
     })
     .catch(err => {
@@ -648,7 +868,19 @@ module.exports.patchEditItem = (req, res, next) => {
 module.exports.patchDeleteItem = (req, res, next) => {
     const { itemId } = req.params;
     const { restaurantId, categoryId, subCategoryId } = req.body;
-    findItemById(itemId, subCategoryId, categoryId, restaurantId)
+    const userId = req.userId;
+    Restaurant.findOne({
+        userId,
+        restaurantId
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Restaurant does not exists");
+            error.statusCode = 401;
+            throw err;
+        }
+        return findItemById(itemId, subCategoryId, categoryId, restaurantId)
+    })
     .then(result => {
         if(!result) {
             const error = new Error("Item is does not exist under the specified location");
@@ -678,7 +910,11 @@ module.exports.patchDeleteItem = (req, res, next) => {
     .then(result => {
         res.status(200).json({
             message: "Item is removed successfully",
-            result
+            result: {
+                categoryId,
+                subCategoryId,
+                itemId
+            }
         })
     })
     .catch(err => {

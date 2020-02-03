@@ -2,7 +2,7 @@ const User = require('../models/User');
 const jwt = require("jsonwebtoken");
 
 exports.isAuth = (req, res, next) => {
-    const [ bearer ,token] = req.get("Authorization").split(" ");
+    const [ bearer ,token ] = req.get("Authorization").split(" ");
     try {
         const user = jwt.verify(token, 'secert');
         if(!user) {
