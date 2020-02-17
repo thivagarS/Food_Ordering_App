@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 
+const mongoose = require('mongoose');
+
 const Restaurant = require('../models/Restaurants');
 const Menu = require('../models/Menu');
 
@@ -258,7 +260,7 @@ module.exports.getUserRestaurantMenu = (req, res, next) => {
         .execPopulate()
     })
     .then(restaurant => {
-        if(restaurantId._id.toString() !== userId.toString()) {
+        if(restaurant.restaurantId.userId.toString() !== userId.toString()) {
             const error = new Error("Restaurant does not belong to logged in user");
             error.statusCode = 401;
             throw error;
@@ -278,7 +280,6 @@ module.exports.getUserRestaurantMenu = (req, res, next) => {
     .catch(err => {
         if(!err.statusCode)
             err.statusCode = 500;
-        throw err;
         next(err);
     })
 }
@@ -321,7 +322,7 @@ module.exports.getRestaurantMenu = (req, res, next) => {
 
 module.exports.patchChangeRestaurantAvailability = (req, res, next) => {
     const userId = req.userId;
-    const restaurantId = req.body.restaurantId; 
+    const restaurantId = req.params.restaurantId; 
     // This will be change the resturant availability
     Restaurant.findOne({
         userId,
@@ -361,6 +362,7 @@ module.exports.patchAddCategory = (req, res, next) => {
     const { restaurantId, name } = req.body;
     const userId = req.userId;
     const lowerCaseName = name.toLowerCase();
+    let docId;
     // Check whether restaurant exists
     Restaurant.findOne({
         _id: restaurantId,
@@ -370,7 +372,7 @@ module.exports.patchAddCategory = (req, res, next) => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
-            throw err;
+            throw error;
         }
         // Checks category exists
         return Menu.findOne({
@@ -384,7 +386,7 @@ module.exports.patchAddCategory = (req, res, next) => {
     })  
     .then(result => {
         // Try populate result.populate(res)
-        console.log(result)
+        docId = new mongoose.Types.ObjectId();
         if(result) {
             const error = new Error("Category is already created ...");
             error.statusCode = 409;
@@ -395,6 +397,7 @@ module.exports.patchAddCategory = (req, res, next) => {
         }, {
             $push: {
                 "category": {
+                    _id: docId,
                     name: lowerCaseName
                 }
             }
@@ -407,7 +410,7 @@ module.exports.patchAddCategory = (req, res, next) => {
             message: "Category is created successfully",
             result: {
                 categoryName: lowerCaseName,
-                categoryId: result.category._id
+                categoryId: docId
             }
         });
     })
@@ -527,6 +530,7 @@ module.exports.patchAddSubCategory = (req, res, next) => {
     const { restaurantId, categoryId,  subCategoryName} = req.body;
     const subCategoryLoweCaseName = subCategoryName.toLowerCase();
     const userId = req.userId;
+    let docId;
     Restaurant.findOne({
         userId,
         _id: restaurantId
@@ -535,35 +539,69 @@ module.exports.patchAddSubCategory = (req, res, next) => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
-            throw err;
+            throw error;
         }
-        // THis will check whether sub category exists for the selected category
         return Menu.findOne({
-            restaurantId, 
+            "restaurantId": restaurantId,
             "category": {
                 $elemMatch: {
-                    _id: categoryId,
-                    subCategory: {
-                        $elemMatch: {
-                            name: subCategoryLoweCaseName
-                        }
-                    }
+                _id: categoryId
                 }
             }
         })
     })
     .then(result => {
-        if(result) {
-            const error = new Error("Sub Category is exists for the selected category");
+        if(!result) {
+            const error = new Error("Category does not exists");
             error.statusCode = 409;
             throw error;
         }
-        // This will create sub category for the selected category
+        // // THis will check whether sub category exists for the selected category
+        // return Menu.findOne({$and: 
+        //     [ 
+        //         {
+        //             "restaurantId": restaurantId,
+        //             "category": {
+        //                 $elemMatch: {
+        //                     _id: categoryId
+        //                 }
+        //             }
+        //         },
+        //         {
+        //             "restaurantId": restaurantId,
+        //             "category": {
+        //                 $elemMatch: {
+        //                     _id: categoryId,
+        //                     subCategory: {
+        //                         $elemMatch: {
+        //                             name: subCategoryLoweCaseName
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     ] 
+        // })
+        const categoryIndex = result.category.findIndex(presentCategory => presentCategory._id.toString() === categoryId);
+        if(categoryIndex < 0) {
+            const error = new Error("Category does not exists");
+            error.statusCode = 409;
+            throw error;
+        }
+        const subCategoryIndex = result.category[categoryIndex].subCategory.findIndex(presentSubCategory => presentSubCategory.name === subCategoryLoweCaseName)
+        if(subCategoryIndex >= 0) {
+            const error = new Error("Sub Category does exists for the selected category");
+            error.statusCode = 409;
+            throw error; 
+        }
+        docId = new mongoose.Types.ObjectId();
+        //This will create sub category for the selected category
         return Menu.findOneAndUpdate({ 
             restaurantId, 
         }, { 
             $push: {
                 "category.$[element].subCategory": {
+                    _id: docId,
                     name: subCategoryLoweCaseName
                 }
             }
@@ -579,7 +617,7 @@ module.exports.patchAddSubCategory = (req, res, next) => {
             result: {
                 categoryId: categoryId,
                 subCategoryName: subCategoryLoweCaseName,
-                subCategoryId: result.category.subCategory._id
+                subCategoryId: docId
             }
         })
     })
@@ -603,7 +641,15 @@ module.exports.patchEditSubCategory = (req, res, next) => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
-            throw err;
+            throw error;
+        }
+        return findCategoryById(categoryId, restaurantId)
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Category does not exists for the restaurant");
+            error.statusCode = 409;
+            throw error;
         }
         // This will check whether sub category exists
         return findSubCategoryById(subCategoryId, categoryId, restaurantId)
@@ -654,13 +700,21 @@ module.exports.patchDeleteSubCategory = (req, res, next) => {
     const userId = req.userId;
     Restaurant.findOne({
         userId,
-        restaurantId
+        _id: restaurantId
     })
     .then(result => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
-            throw err;
+            throw error;
+        }
+        return findCategoryById(categoryId, restaurantId)
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Category does not exists for the restaurant");
+            error.statusCode = 409;
+            throw error;
         }
         // This will check whether sub category exists
         return findSubCategoryById(subCategoryId, categoryId, restaurantId)
@@ -710,15 +764,33 @@ module.exports.patchAddItem = (req, res, next) => {
     const { restaurantId, categoryId, subCategoryId, name, description, rate, isVeg } = req.body;
     const formattedItemName = name.toLowerCase();
     const userId = req.userId;
+    let docId;
     Restaurant.findOne({
         userId,
-        restaurantId
+        _id: restaurantId
     })
     .then(result => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
             throw err;
+        }
+        return Menu.findOne({
+            restaurantId
+        })
+    })
+    .then(result => {
+        const categoryIndex = result.category.findIndex(presentCategory => presentCategory._id.toString() === categoryId.toString());
+        if(categoryIndex === -1) {
+            const error = new Error("Category does not exists");
+            error.statusCode = 409;
+            throw error;
+        }
+        const subCategoryIndex = result.category[categoryIndex].subCategory.findIndex(presentSubCategory => presentSubCategory._id.toString() === subCategoryId.toString());
+        if(subCategoryIndex === -1) {
+            const error = new Error("Sub Category does not exists for the selected category");
+            error.statusCode = 409;
+            throw error;
         }
         // This will check whether the item is exist under same category n same sub category
         return Menu.findOne({
@@ -747,12 +819,14 @@ module.exports.patchAddItem = (req, res, next) => {
             error.statusCode = 409;
             throw error;
         }
+        docId = new mongoose.Types.ObjectId();
         // This will add new item to the menu
         return Menu.findOneAndUpdate({
             restaurantId
         }, {
             $push: {
                 "category.$[categoryElem].subCategory.$[subCategoryElem].item": {
+                    _id: docId,
                     name: formattedItemName,
                     description,
                     rate,
@@ -777,7 +851,7 @@ module.exports.patchAddItem = (req, res, next) => {
             result: {
                 categoryId,
                 subCategoryId,
-                itemId: result.category.subCategory.item._id,
+                itemId: docId,
                 itemName: formattedItemName,
                 itemDescription: description,
                 itemRate: rate,
@@ -805,13 +879,29 @@ module.exports.patchEditItem = (req, res, next) => {
     const userId = req.userId;
     Restaurant.findOne({
         userId,
-        restaurantId
+        _id: restaurantId
     })
     .then(result => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
-            throw err;
+            throw error;
+        }
+        return findCategoryById(categoryId, restaurantId)
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Category does not exists for the restaurant");
+            error.statusCode = 404;
+            throw error;
+        }
+        return findSubCategoryById(subCategoryId, categoryId, restaurantId)
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Sub category does not exists for the selected category");
+            error.statusCode = 404;
+            throw error;
         }
         // This will check whether item is present
         return findItemById(itemId, subCategoryId, categoryId, restaurantId)
@@ -871,14 +961,31 @@ module.exports.patchDeleteItem = (req, res, next) => {
     const userId = req.userId;
     Restaurant.findOne({
         userId,
-        restaurantId
+        _id: restaurantId
     })
     .then(result => {
         if(!result) {
             const error = new Error("Restaurant does not exists");
             error.statusCode = 401;
-            throw err;
+            throw error;
         }
+        return findCategoryById(categoryId, restaurantId)
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Category does not exists for the restaurant");
+            error.statusCode = 404;
+            throw error;
+        }
+        return findSubCategoryById(subCategoryId, categoryId, restaurantId)
+    })
+    .then(result => {
+        if(!result) {
+            const error = new Error("Sub category does not exists for the selected category");
+            error.statusCode = 404;
+            throw error;
+        }
+        // This will check whether item is present
         return findItemById(itemId, subCategoryId, categoryId, restaurantId)
     })
     .then(result => {
@@ -887,7 +994,6 @@ module.exports.patchDeleteItem = (req, res, next) => {
             error.statusCode = 404;
             throw error;
         }
-        console.log(result)
         return Menu.findOneAndUpdate({
             restaurantId
         }, {

@@ -22,7 +22,7 @@ router.patch('/verification/:token', restaurantController.patchVerifyRestaurantE
     @Auth - required
     @Desc - This route is used to change restaurant availability status
 */
-router.patch('/changeAvailability', isAuth, restaurantController.patchChangeRestaurantAvailability);
+router.patch('/changeAvailability/:restaurantId', isAuth, restaurantController.patchChangeRestaurantAvailability);
 /*
     @Method - GET
     @Auth - not required
@@ -46,14 +46,13 @@ router.get('/:restaurantId', restaurantController.getRestaurant);
     @Auth - not required
     @Desc - This route is used to get restaurant menu.
 */
-router.get('/menu/:restaurantId', restaurantController.getRestaurantMenu);
+router.get('/menu/:restaurantId', restaurantController.getRestaurantMenu); 
 /*
     @Method - GET
     @Auth - required
     @Desc - This route is used to get menu for user's restaurant.
 */
-router.get('/menu/:restaurantId', restaurantController.getUserRestaurantMenu);
-
+router.get('/user/menu/:restaurantId', isAuth, restaurantController.getUserRestaurantMenu); // needs to be tested
 /*
     @Method - PATCH
     @Auth - required
@@ -113,6 +112,4 @@ module.exports = router;
 
 /*
     -- To get orders
-    -- To get menu
-
 */

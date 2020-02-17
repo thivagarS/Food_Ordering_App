@@ -37,7 +37,7 @@ const menuSchema = new Schema({
                             },
                             isItemAvailable: {
                                 type: Boolean,
-                                default: true
+                                default: false
                             }
                         }
                     ]

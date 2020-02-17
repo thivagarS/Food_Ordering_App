@@ -169,51 +169,57 @@ module.exports.postLogin = (req, res, next) => {
 module.exports.patchChangePassword = (req, res, next) => {
     const userId = req.userId;
     let loadedUser;
-    const { currentPassword, newPassword } = req.body;
-    User.findById(userId)
-    .then(user => {
-        if(!user) {
-            const error = new Error("User not found");
-            error.statusCode = 401;
-            throw error;
-        }
-        loadedUser = user;
-        return bcryptjs.compare(currentPassword, user.password)
-    })
-    .then(isEqual => {
-        // This will check whether current password is same
-        if(!isEqual) {
-            const error = new Error("Invalid current password");
-            error.statusCode = 401;
-            throw error;
-        }
-        console.log(loadedUser.password)
-        return bcryptjs.compare(newPassword, loadedUser.password)
-    })
-    .then(isEqual => {
-        // Checks current password and new password
-        if(isEqual) {
-            const error = new Error("New password is same as old password");
-            error.statusCode = 409;
-            throw error;
-        }
-        return bcryptjs.hash(newPassword, 12)
-    })
-    .then(hashedPassword => {
-        loadedUser.password = hashedPassword;
-        return loadedUser.save();
-    })
-    .then(user => {
-        res.status(200).json({
-            message: "Password changed successfuly"
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+    if(newPassword === confirmNewPassword) {
+        User.findById(userId)
+        .then(user => {
+            if(!user) {
+                const error = new Error("User not found");
+                error.statusCode = 401;
+                throw error;
+            }
+            loadedUser = user;
+            return bcryptjs.compare(currentPassword, user.password)
         })
-    })
-    .catch(err => {
-        if(!err.statusCode) {
-            err.statusCode = 500;
-        }
-        next(err);
-    })
+        .then(isEqual => {
+            // This will check whether current password is same
+            if(!isEqual) {
+                const error = new Error("Invalid current password");
+                error.statusCode = 401;
+                throw error;
+            }
+            console.log(loadedUser.password)
+            return bcryptjs.compare(newPassword, loadedUser.password)
+        })
+        .then(isEqual => {
+            // Checks current password and new password
+            if(isEqual) {
+                const error = new Error("New password is same as old password");
+                error.statusCode = 409;
+                throw error;
+            }
+            return bcryptjs.hash(newPassword, 12)
+        })
+        .then(hashedPassword => {
+            loadedUser.password = hashedPassword;
+            return loadedUser.save();
+        })
+        .then(user => {
+            res.status(200).json({
+                message: "Password changed successfuly"
+            })
+        })
+        .catch(err => {
+            if(!err.statusCode) {
+                err.statusCode = 500;
+            }
+            next(err);
+        })
+    } else {
+        const error = new Error("Password does not match");
+        error.statusCode = 401;
+        next(error);
+    }
 }
 
 module.exports.patchResetPasswordLink = (req, res, next) => {

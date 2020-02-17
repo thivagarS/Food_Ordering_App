@@ -2,8 +2,8 @@ const User = require('../models/User');
 const jwt = require("jsonwebtoken");
 
 exports.isAuth = (req, res, next) => {
-    const [ bearer ,token ] = req.get("Authorization").split(" ");
     try {
+        const [ bearer ,token ] = req.get("Authorization").split(" ");
         const user = jwt.verify(token, 'secert');
         if(!user) {
             const err = new Error("Not Authorized");
